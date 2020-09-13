@@ -19,5 +19,5 @@ def http_request(url, timeout):
         raise e
 
 
-def urlencode(params):
+def url_encode(params):
     return urlencode(params)

@@ -32,7 +32,7 @@ def signature(timestamp, uri, secret):
 
 
 def url_encode_wrapper(params):
-    return urlencode(params)
+    return url_encode(params)
 
 
 # 返回2个值得，第一个是是否存在，第二个是value值
