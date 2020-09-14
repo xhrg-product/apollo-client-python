@@ -75,16 +75,10 @@ class ApolloClient(object):
 
     def get_value(self, key, default_val=None, namespace='application'):
         try:
-            # 读取本地缓存
+            # 读取内存配置
             namespace_cache = self._mycache.get(namespace)
             have, val = get_value_from_dict(namespace_cache, key)
             if have:
-                return val_handler(val, default_val)
-            # 读取本地文件
-            namespace_cache = self._get_local_cache(namespace)
-            have, val = get_value_from_dict(namespace_cache, key)
-            if have:
-                self._update_cache_and_file(namespace_cache, namespace)
                 return val_handler(val, default_val)
 
             # 读取网络配置
@@ -92,6 +86,13 @@ class ApolloClient(object):
             have, val = get_value_from_dict(namespace_data, key)
             if have:
                 self._update_cache_and_file(namespace_data, namespace)
+                return val_handler(val, default_val)
+
+            # 读取文件配置
+            namespace_cache = self._get_local_cache(namespace)
+            have, val = get_value_from_dict(namespace_cache, key)
+            if have:
+                self._update_cache_and_file(namespace_cache, namespace)
                 return val_handler(val, default_val)
 
             # 如果全部没有获取，则把默认值返回，设置本地缓存为None
