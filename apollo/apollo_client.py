@@ -27,7 +27,8 @@ logging.basicConfig()
 
 class ApolloClient(object):
 
-    def __init__(self, app_id, cluster=None, apollo_config_url=None, cycle_time=2, secret='', start_hot_update=True):
+    def __init__(self, app_id, cluster=None, apollo_config_url=None, cycle_time=2, secret='', start_hot_update=True,
+                 change_listener=None):
 
         # 核心路由参数
         self.config_server_url = apollo_config_url
@@ -50,18 +51,13 @@ class ApolloClient(object):
         self._started = False
         self._pull_timeout = 75
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
-        self.long_poll_thread = None
-        self.call_time = 0
-        self.change_listener = None
+        self._long_poll_thread = None
+        self._change_listener = change_listener  # "add" "delete" "update"
 
         # 私有启动方法
         self._path_checker()
         if start_hot_update:
             self._start_hot_update()
-
-    # "add" "delete" "update"
-    def set_change_listener(self, change_listener):
-        self.change_listener = change_listener
 
     def get_json_from_net(self, namespace='application'):
         url = '{}/configfiles/json/{}/{}/{}?ip={}'.format(self.config_server_url, self.app_id, self.cluster, namespace,
@@ -127,10 +123,10 @@ class ApolloClient(object):
         if self._started:
             return
         self._started = True
-        self.long_poll_thread = threading.Thread(target=self._listener)
+        self._long_poll_thread = threading.Thread(target=self._listener)
         # 启动异步线程为守护线程，主线程推出的时候，守护线程会自动退出。
-        self.long_poll_thread.setDaemon(True)
-        self.long_poll_thread.start()
+        self._long_poll_thread.setDaemon(True)
+        self._long_poll_thread.start()
 
     def stop(self):
         self._stopping = True
@@ -138,7 +134,7 @@ class ApolloClient(object):
 
     # 调用设置的回调函数，如果异常，直接try掉
     def _call_listener(self, namespace, old_kv, new_kv):
-        if self.change_listener is None:
+        if self._change_listener is None:
             return
         try:
             for key in old_kv:
@@ -146,16 +142,16 @@ class ApolloClient(object):
                 old_value = old_kv.get(key)
                 if new_value is None:
                     # 如果newValue 是空，则表示key，value被删除了。
-                    self.change_listener("delete", namespace, key, old_value)
+                    self._change_listener("delete", namespace, key, old_value)
                     continue
                 if new_value != old_value:
-                    self.change_listener("update", namespace, key, new_value)
+                    self._change_listener("update", namespace, key, new_value)
                     continue
             for key in new_kv:
                 new_value = new_kv.get(key)
                 old_value = old_kv.get(key)
                 if old_value is None:
-                    self.change_listener("add", namespace, key, new_value)
+                    self._change_listener("add", namespace, key, new_value)
         except BaseException as e:
             logging.getLogger(__name__).warning(str(e))
 
