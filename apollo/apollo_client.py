@@ -27,7 +27,7 @@ logging.basicConfig()
 
 class ApolloClient(object):
 
-    def __init__(self, app_id, cluster=None, apollo_config_url=None, cycle_time=2, secret='', start_hot_update=True,
+    def __init__(self, apollo_config_url, app_id, cluster='default', secret='', start_hot_update=True,
                  change_listener=None):
 
         # 核心路由参数
@@ -38,17 +38,14 @@ class ApolloClient(object):
         # 非核心参数
         self.ip = init_ip()
         self.secret = secret
-        self._cycle_time = cycle_time
 
         # 检查参数变量
-        if self._cycle_time <= 1:
-            self._cycle_time = 1
 
         # 私有控制变量
+        self._cycle_time = 2
         self._stopping = False
         self._cache = {}
         self._hash = {}
-        self._started = False
         self._pull_timeout = 75
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
         self._long_poll_thread = None
@@ -60,10 +57,11 @@ class ApolloClient(object):
             self._start_hot_update()
 
     def get_json_from_net(self, namespace='application'):
+
         url = '{}/configfiles/json/{}/{}/{}?ip={}'.format(self.config_server_url, self.app_id, self.cluster, namespace,
                                                           self.ip)
         try:
-            code, body = http_request(url, timeout=3)
+            code, body = http_request(url, timeout=3, headers=self._signHeaders(url))
             if code == 200:
                 data = json.loads(body)
                 return_data = {CONFIGURATIONS: data}
@@ -120,9 +118,6 @@ class ApolloClient(object):
             kv_data[key] = None
 
     def _start_hot_update(self):
-        if self._started:
-            return
-        self._started = True
         self._long_poll_thread = threading.Thread(target=self._listener)
         # 启动异步线程为守护线程，主线程推出的时候，守护线程会自动退出。
         self._long_poll_thread.setDaemon(True)
@@ -136,6 +131,10 @@ class ApolloClient(object):
     def _call_listener(self, namespace, old_kv, new_kv):
         if self._change_listener is None:
             return
+        if old_kv is None:
+            old_kv = {}
+        if new_kv is None:
+            new_kv = {}
         try:
             for key in old_kv:
                 new_value = new_kv.get(key)
@@ -211,7 +210,7 @@ class ApolloClient(object):
             }
             param_str = url_encode_wrapper(params)
             url = url + '?' + param_str
-            code, body = http_request(url, self._pull_timeout)
+            code, body = http_request(url, self._pull_timeout, headers=self._signHeaders(url))
             http_code = code
             if http_code == 304:
                 logging.getLogger(__name__).debug('No change, loop...')
@@ -222,17 +221,22 @@ class ApolloClient(object):
                     namespace = entry[NAMESPACE_NAME]
                     n_id = entry[NOTIFICATION_ID]
                     logging.getLogger(__name__).info("%s has changes: notificationId=%d", namespace, n_id)
-                    self._get_net_and_set_local(namespace, n_id)
+                    self._get_net_and_set_local(namespace, n_id, call_change=True)
                     return
             else:
                 logging.getLogger(__name__).warning('Sleep...')
         except Exception as e:
             logging.getLogger(__name__).warning(str(e))
 
-    def _get_net_and_set_local(self, namespace, n_id):
+    def _get_net_and_set_local(self, namespace, n_id, call_change=False):
         namespace_data = self.get_json_from_net(namespace)
         namespace_data[NOTIFICATION_ID] = n_id
+        old_namespace = self._cache.get(namespace)
         self._update_cache_and_file(namespace_data, namespace)
+        if self._change_listener is not None and call_change:
+            old_kv = old_namespace.get(CONFIGURATIONS)
+            new_kv = namespace_data.get(CONFIGURATIONS)
+            self._call_listener(namespace, old_kv, new_kv)
 
     def _listener(self):
         logging.getLogger(__name__).info('Entering listener loop...')
