@@ -12,6 +12,7 @@
 * 支持灰度发布
 * 支持本地文件缓存
 * 默认开启热更新，参数配置可以不开启热更新
+* 同时支持python2.x和python3.x，详情见./apollo/下的python_2x.py和python_3x.py文件
 
 ## 注意点:
 
