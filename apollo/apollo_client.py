@@ -29,28 +29,28 @@ class ApolloClient(object):
 
     def __init__(self, app_id, cluster=None, apollo_config_url=None, cycle_time=2, secret='', start_hot_update=True):
 
-        # 配置参数变量
+        # 核心路由参数
         self.config_server_url = apollo_config_url
         self.cluster = cluster
         self.app_id = app_id
-        self.stopped = False
-        self.ip = init_ip()
-        self._stopping = False
-        self._mycache = {}
-        ## 检查参数变量
 
-        # 休眠时间周期，每次请求结束后会 time.sleep(self._cycle_time)
-        if cycle_time <= 1:
-            cycle_time = 1
+        # 非核心参数
+        self.ip = init_ip()
+        self.secret = secret
         self._cycle_time = cycle_time
 
-        # 私有设置变量
+        # 检查参数变量
+        if self._cycle_time <= 1:
+            self._cycle_time = 1
+
+        # 私有控制变量
+        self._stopping = False
+        self._cache = {}
         self._hash = {}
         self._started = False
         self._pull_timeout = 75
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
         self.long_poll_thread = None
-        self.secret = secret
         self.call_time = 0
         self.change_listener = None
 
@@ -81,7 +81,7 @@ class ApolloClient(object):
     def get_value(self, key, default_val=None, namespace='application'):
         try:
             # 读取内存配置
-            namespace_cache = self._mycache.get(namespace)
+            namespace_cache = self._cache.get(namespace)
             have, val = get_value_from_dict(namespace_cache, key)
             if have:
                 return val_handler(val, default_val)
@@ -111,10 +111,10 @@ class ApolloClient(object):
     # 设置某个namespace的key为none，这里不设置default_val，是为了保证函数调用实时的正确性。
     # 假设用户2次default_val不一样，然而这里却用default_val填充，则可能会有问题。
     def _set_local_cache_none(self, key, namespace):
-        namespace_cache = self._mycache.get(namespace)
+        namespace_cache = self._cache.get(namespace)
         if namespace_cache is None:
             namespace_cache = {}
-            self._mycache[namespace] = namespace_cache
+            self._cache[namespace] = namespace_cache
         kv_data = namespace_cache.get(CONFIGURATIONS)
         if kv_data is None:
             kv_data = {}
@@ -123,7 +123,7 @@ class ApolloClient(object):
         if val not in kv_data:
             kv_data[key] = None
 
-    def _start_hot_update(self, catch_signals=True):
+    def _start_hot_update(self):
         if self._started:
             return
         self._started = True
@@ -170,7 +170,7 @@ class ApolloClient(object):
     def _update_cache_and_file(self, namespace_data, namespace='application'):
 
         # 更新本地缓存
-        self._mycache[namespace] = namespace_data
+        self._cache[namespace] = namespace_data
 
         # 更新文件缓存
         new_string = json.dumps(namespace_data)
@@ -194,11 +194,11 @@ class ApolloClient(object):
 
     def _long_poll(self):
         notifications = []
-        for key in self._mycache:
-            namespace_data = self._mycache[key]
+        for key in self._cache:
+            namespace_data = self._cache[key]
             notification_id = -1
             if NOTIFICATION_ID in namespace_data:
-                notification_id = self._mycache[key][NOTIFICATION_ID]
+                notification_id = self._cache[key][NOTIFICATION_ID]
             notifications.append({
                 NAMESPACE_NAME: key,
                 NOTIFICATION_ID: notification_id
@@ -244,7 +244,6 @@ class ApolloClient(object):
             self._long_poll()
             time.sleep(self._cycle_time)
         logging.getLogger(__name__).info("Listener stopped!")
-        self.stopped = True
 
     # 给header增加加签需求
     def _signHeaders(self, url):
