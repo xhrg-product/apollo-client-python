@@ -128,7 +128,7 @@ class ApolloClient(object):
             return
         self._started = True
         self.long_poll_thread = threading.Thread(target=self._listener)
-        # 启动异步线程为守护线程，主线程推出
+        # 启动异步线程为守护线程，主线程推出的时候，守护线程会自动退出。
         self.long_poll_thread.setDaemon(True)
         self.long_poll_thread.start()
 
