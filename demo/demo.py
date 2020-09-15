@@ -15,5 +15,3 @@ x = ApolloClient(app_id="demo-service", cluster="default", apollo_config_url=apo
 
 val = x.get_value("name", default_val="cc")
 print(val)
-
-x.start_hot_update()

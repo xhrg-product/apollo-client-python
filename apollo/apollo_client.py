@@ -127,29 +127,14 @@ class ApolloClient(object):
         if self._started:
             return
         self._started = True
-        if catch_signals:
-            import signal
-            signal.signal(signal.SIGINT, self._signal_handler)
-            signal.signal(signal.SIGTERM, self._signal_handler)
-            signal.signal(signal.SIGABRT, self._signal_handler)
         self.long_poll_thread = threading.Thread(target=self._listener)
+        # 启动异步线程为守护线程，主线程推出
         self.long_poll_thread.setDaemon(True)
         self.long_poll_thread.start()
 
     def stop(self):
         self._stopping = True
         logging.getLogger(__name__).info("Stopping listener...")
-
-    def _async_raise(self, ident, exctype):
-        tid = ctypes.c_long(ident)
-        if not inspect.isclass(exctype):
-            exctype = type(exctype)
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(exctype))
-        if res == 0:
-            raise ValueError("invalid thread id")
-        elif res != 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
-            raise SystemError("PyThreadState_SetAsyncExc failed")
 
     # 调用设置的回调函数，如果异常，直接try掉
     def _call_listener(self, namespace, old_kv, new_kv):
@@ -173,14 +158,6 @@ class ApolloClient(object):
                     self.change_listener("add", namespace, key, new_value)
         except BaseException as e:
             logging.getLogger(__name__).warning(str(e))
-
-    def _signal_handler(self, signal_num, stack_frame):
-        logging.getLogger(__name__).info('You pressed Ctrl+C!')
-        logging.getLogger(__name__).info(signal_num)
-        logging.getLogger(__name__).info(stack_frame)
-        if self.long_poll_thread.is_alive():
-            self._stopping = True
-            self._async_raise(self.long_poll_thread.ident, SystemExit)
 
     def _path_checker(self):
         if not os.path.isdir(self._cache_file_path):
