@@ -27,32 +27,37 @@ logging.basicConfig()
 
 class ApolloClient(object):
 
-    def __init__(self, app_id, cluster=None, apollo_config_url=None, cycle_time=2, secret=''):
+    def __init__(self, app_id, cluster=None, apollo_config_url=None, cycle_time=2, secret='', start_hot_update=True):
 
-        # 配置变量
+        # 配置参数变量
         self.config_server_url = apollo_config_url
         self.cluster = cluster
         self.app_id = app_id
-
         self.stopped = False
         self.ip = init_ip()
         self._stopping = False
         self._mycache = {}
+        ## 检查参数变量
+
         # 休眠时间周期，每次请求结束后会 time.sleep(self._cycle_time)
         if cycle_time <= 1:
             cycle_time = 1
         self._cycle_time = cycle_time
+
+        # 私有设置变量
         self._hash = {}
+        self._started = False
+        self._pull_timeout = 75
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
-        self._path_checker()
         self.long_poll_thread = None
         self.secret = secret
         self.call_time = 0
         self.change_listener = None
 
-        # 私有设置变量
-        self._started = False
-        self._pull_timeout = 75
+        # 私有启动方法
+        self._path_checker()
+        if start_hot_update:
+            self._start_hot_update()
 
     # "add" "delete" "update"
     def set_change_listener(self, change_listener):
@@ -118,7 +123,7 @@ class ApolloClient(object):
         if val not in kv_data:
             kv_data[key] = None
 
-    def start_hot_update(self, catch_signals=True):
+    def _start_hot_update(self, catch_signals=True):
         if self._started:
             return
         self._started = True
