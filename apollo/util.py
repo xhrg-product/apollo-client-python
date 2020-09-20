@@ -35,15 +35,19 @@ def url_encode_wrapper(params):
     return url_encode(params)
 
 
-# 返回2个值得，第一个是是否存在，第二个是value值
+def no_key_cache_key(namespace, key):
+    return "{}{}{}".format(namespace, len(namespace), key)
+
+
+# 返回是否获取到的值，不存在则返回None
 def get_value_from_dict(namespace_cache, key):
     if namespace_cache:
         kv_data = namespace_cache.get(CONFIGURATIONS)
         if kv_data is None:
-            return False, None
+            return None
         if key in kv_data:
-            return True, kv_data[key]
-    return False, None
+            return kv_data[key]
+    return None
 
 
 def init_ip():
@@ -55,10 +59,3 @@ def init_ip():
     finally:
         s.close()
     return ""
-
-
-# 只有None，则返回default_val，如果是空字符串也返回字符串，因为apollo本身是支持空字符串的。
-def val_handler(val, default_val):
-    if val is None:
-        return default_val
-    return val

@@ -22,7 +22,10 @@ if version == 2:
 if version == 3:
     from .python_3x import *
 
-logging.basicConfig()
+# logging.basicConfig()
+logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%d-%m-%Y:%H:%M:%S',
+    level=logging.DEBUG)
 
 
 class ApolloClient(object):
@@ -45,6 +48,7 @@ class ApolloClient(object):
         self._cycle_time = 2
         self._stopping = False
         self._cache = {}
+        self._no_key = {}
         self._hash = {}
         self._pull_timeout = 75
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
@@ -76,26 +80,30 @@ class ApolloClient(object):
         try:
             # 读取内存配置
             namespace_cache = self._cache.get(namespace)
-            have, val = get_value_from_dict(namespace_cache, key)
-            if have:
-                return val_handler(val, default_val)
+            val = get_value_from_dict(namespace_cache, key)
+            if val is not None:
+                return val
+
+            no_key = no_key_cache_key(namespace, key)
+            if no_key in self._no_key:
+                return default_val
 
             # 读取网络配置
             namespace_data = self.get_json_from_net(namespace)
-            have, val = get_value_from_dict(namespace_data, key)
-            if have:
+            val = get_value_from_dict(namespace_data, key)
+            if val is not None:
                 self._update_cache_and_file(namespace_data, namespace)
-                return val_handler(val, default_val)
+                return val
 
             # 读取文件配置
             namespace_cache = self._get_local_cache(namespace)
-            have, val = get_value_from_dict(namespace_cache, key)
-            if have:
+            val = get_value_from_dict(namespace_cache, key)
+            if val is not None:
                 self._update_cache_and_file(namespace_cache, namespace)
-                return val_handler(val, default_val)
+                return val
 
             # 如果全部没有获取，则把默认值返回，设置本地缓存为None
-            self._set_local_cache_none(key, namespace)
+            self._set_local_cache_none(namespace, key)
             return default_val
         except Exception as e:
             logging.getLogger(__name__).error("get_value has error, [key is %s], [namespace is %s], [error is %s], ",
@@ -104,18 +112,9 @@ class ApolloClient(object):
 
     # 设置某个namespace的key为none，这里不设置default_val，是为了保证函数调用实时的正确性。
     # 假设用户2次default_val不一样，然而这里却用default_val填充，则可能会有问题。
-    def _set_local_cache_none(self, key, namespace):
-        namespace_cache = self._cache.get(namespace)
-        if namespace_cache is None:
-            namespace_cache = {}
-            self._cache[namespace] = namespace_cache
-        kv_data = namespace_cache.get(CONFIGURATIONS)
-        if kv_data is None:
-            kv_data = {}
-            namespace_cache[CONFIGURATIONS] = kv_data
-        val = kv_data.get(key)
-        if val not in kv_data:
-            kv_data[key] = None
+    def _set_local_cache_none(self, namespace, key):
+        no_key = no_key_cache_key(namespace, key)
+        self._no_key[no_key] = key
 
     def _start_hot_update(self):
         self._long_poll_thread = threading.Thread(target=self._listener)
