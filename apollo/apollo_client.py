@@ -24,17 +24,17 @@ if version == 3:
 
 # logging.basicConfig()
 logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%d-%m-%Y:%H:%M:%S',
-    level=logging.DEBUG)
+                    datefmt='%d-%m-%Y:%H:%M:%S',
+                    level=logging.DEBUG)
 
 
 class ApolloClient(object):
 
-    def __init__(self, apollo_config_url, app_id, cluster='default', secret='', start_hot_update=True,
+    def __init__(self, config_url, app_id, cluster='default', secret='', start_hot_update=True,
                  change_listener=None):
 
         # 核心路由参数
-        self.config_server_url = apollo_config_url
+        self.config_url = config_url
         self.cluster = cluster
         self.app_id = app_id
 
@@ -62,7 +62,7 @@ class ApolloClient(object):
 
     def get_json_from_net(self, namespace='application'):
 
-        url = '{}/configfiles/json/{}/{}/{}?ip={}'.format(self.config_server_url, self.app_id, self.cluster, namespace,
+        url = '{}/configfiles/json/{}/{}/{}?ip={}'.format(self.config_url, self.app_id, self.cluster, namespace,
                                                           self.ip)
         try:
             code, body = http_request(url, timeout=3, headers=self._signHeaders(url))
@@ -201,7 +201,7 @@ class ApolloClient(object):
             # 如果长度为0直接返回
             if len(notifications) == 0:
                 return
-            url = '{}/notifications/v2'.format(self.config_server_url)
+            url = '{}/notifications/v2'.format(self.config_url)
             params = {
                 'appId': self.app_id,
                 'cluster': self.cluster,
@@ -238,18 +238,18 @@ class ApolloClient(object):
             self._call_listener(namespace, old_kv, new_kv)
 
     def _listener(self):
-        logging.getLogger(__name__).info('Entering listener loop...')
+        logging.getLogger(__name__).info('start long_poll')
         while not self._stopping:
             self._long_poll()
             time.sleep(self._cycle_time)
-        logging.getLogger(__name__).info("Listener stopped!")
+        logging.getLogger(__name__).info("stopped, long_poll")
 
     # 给header增加加签需求
     def _signHeaders(self, url):
         headers = {}
         if self.secret == '':
             return headers
-        uri = url[len(self.config_server_url):len(url)]
+        uri = url[len(self.config_url):len(url)]
         time_unix_now = str(int(round(time.time() * 1000)))
         headers['Authorization'] = 'Apollo ' + self.app_id + ':' + signature(time_unix_now, uri, self.secret)
         headers['Timestamp'] = time_unix_now
