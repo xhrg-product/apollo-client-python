@@ -60,20 +60,25 @@ class ApolloClient(object):
         if start_hot_update:
             self._start_hot_update()
 
-    def get_json_from_net(self, namespace='application'):
+        # 启动心跳线程
+        heartbeat = threading.Thread(target=self._heartBeat)
+        heartbeat.setDaemon(True)
+        heartbeat.start()
 
-        url = '{}/configfiles/json/{}/{}/{}?ip={}'.format(self.config_url, self.app_id, self.cluster, namespace,
-                                                          self.ip)
+    def get_json_from_net(self, namespace='application'):
+        url = '{}/configs/{}/{}/{}?releaseKey={}&ip={}'.format(self.config_url, self.app_id, self.cluster, namespace,
+                                                               "", self.ip)
         try:
             code, body = http_request(url, timeout=3, headers=self._signHeaders(url))
             if code == 200:
                 data = json.loads(body)
+                data = data["configurations"]
                 return_data = {CONFIGURATIONS: data}
                 return return_data
             else:
                 return None
         except Exception as e:
-            logging.getLogger(__name__).warning(str(e))
+            logging.getLogger(__name__).error(str(e))
             return None
 
     def get_value(self, key, default_val=None, namespace='application'):
@@ -162,10 +167,8 @@ class ApolloClient(object):
 
     # 更新本地缓存和文件缓存
     def _update_cache_and_file(self, namespace_data, namespace='application'):
-
         # 更新本地缓存
         self._cache[namespace] = namespace_data
-
         # 更新文件缓存
         new_string = json.dumps(namespace_data)
         new_hash = hashlib.md5(new_string.encode('utf-8')).hexdigest()
@@ -254,3 +257,26 @@ class ApolloClient(object):
         headers['Authorization'] = 'Apollo ' + self.app_id + ':' + signature(time_unix_now, uri, self.secret)
         headers['Timestamp'] = time_unix_now
         return headers
+
+    def _heartBeat(self):
+        while not self._stopping:
+            time.sleep(60 * 10)  # 10分钟
+            for namespace in self._notification_map:
+                self._do_heartBeat(namespace)
+
+    def _do_heartBeat(self, namespace):
+        release_key = self._release_key_map.get(namespace)
+        url = '{}/configs/{}/{}/{}?releaseKey={}&ip={}'.format(self.config_url, self.app_id, self.cluster, namespace,
+                                                               release_key, self.ip)
+        try:
+            code, body = http_request(url, timeout=3, headers=self._signHeaders(url))
+            if code == 200:
+                data = json.loads(body)
+                self._release_key_map[namespace] = data["releaseKey"]
+                data = data["configurations"]
+                self._update_cache_and_file(data, namespace)
+            else:
+                return None
+        except Exception as e:
+            logging.getLogger(__name__).error(str(e))
+            return None
