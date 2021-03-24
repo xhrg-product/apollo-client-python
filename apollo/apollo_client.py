@@ -160,10 +160,8 @@ class ApolloClient(object):
 
     def _path_checker(self):
         if not os.path.isdir(self._cache_file_path):
-            if sys.version_info.major == 3:
-                os.makedirs(self._cache_file_path, exist_ok=True)
-            else:
-                os.makedirs(self._cache_file_path)
+            makedirs_wrapper(self._cache_file_path)
+
 
     # 更新本地缓存和文件缓存
     def _update_cache_and_file(self, namespace_data, namespace='application'):

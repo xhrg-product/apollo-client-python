@@ -4,6 +4,7 @@
 # @author:xhrg
 # @email:634789257@qq.com
 import logging
+import os
 
 import urllib.request
 from urllib.error import HTTPError
@@ -26,3 +27,7 @@ def http_request(url, timeout, headers={}):
 
 def url_encode(params):
     return parse.urlencode(params)
+
+
+def makedirs_wrapper(path):
+    os.makedirs(path, exist_ok=True)
