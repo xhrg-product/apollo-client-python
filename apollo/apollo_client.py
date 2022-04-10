@@ -54,7 +54,8 @@ class ApolloClient(object):
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
         self._long_poll_thread = None
         self._change_listener = change_listener  # "add" "delete" "update"
-
+        self._notification_map = {'application': -1}
+        self.last_release_key = None
         # 私有启动方法
         self._path_checker()
         if start_hot_update:
@@ -258,19 +259,20 @@ class ApolloClient(object):
 
     def _heartBeat(self):
         while not self._stopping:
-            time.sleep(60 * 10)  # 10分钟
             for namespace in self._notification_map:
                 self._do_heartBeat(namespace)
+            time.sleep(60 * 10)  # 10分钟
 
     def _do_heartBeat(self, namespace):
-        release_key = self._release_key_map.get(namespace)
-        url = '{}/configs/{}/{}/{}?releaseKey={}&ip={}'.format(self.config_url, self.app_id, self.cluster, namespace,
-                                                               release_key, self.ip)
+        url = '{}/configs/{}/{}/{}?ip={}'.format(self.config_url, self.app_id, self.cluster, namespace,
+                                                 self.ip)
         try:
             code, body = http_request(url, timeout=3, headers=self._signHeaders(url))
             if code == 200:
                 data = json.loads(body)
-                self._release_key_map[namespace] = data["releaseKey"]
+                if self.last_release_key == data["releaseKey"]:
+                    return None
+                self.last_release_key = data["releaseKey"]
                 data = data["configurations"]
                 self._update_cache_and_file(data, namespace)
             else:
