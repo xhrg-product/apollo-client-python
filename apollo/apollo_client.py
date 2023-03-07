@@ -31,7 +31,7 @@ logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:
 class ApolloClient(object):
 
     def __init__(self, config_url, app_id, cluster='default', secret='', start_hot_update=True,
-                 change_listener=None):
+                 change_listener=None, _notification_map=None):
 
         # 核心路由参数
         self.config_url = config_url
@@ -54,7 +54,9 @@ class ApolloClient(object):
         self._cache_file_path = os.path.expanduser('~') + '/data/apollo/cache/'
         self._long_poll_thread = None
         self._change_listener = change_listener  # "add" "delete" "update"
-        self._notification_map = {'application': -1}
+        if _notification_map is None:
+            _notification_map = {'application': -1}
+        self._notification_map = _notification_map
         self.last_release_key = None
         # 私有启动方法
         self._path_checker()
