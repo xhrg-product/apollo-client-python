@@ -84,39 +84,62 @@ class ApolloClient(object):
             logging.getLogger(__name__).error(str(e))
             return None
 
+    def _convert_type(self, value):
+        try:
+            if value is None:
+                return None
+            
+            if value in ["true", "True"]:
+                return True
+
+            if value in ["false", "False"]:
+                return False
+            
+            if value in ["null", "undefined"]:
+                return None
+            
+            try:
+                actual_value = eval(value)
+                return actual_value
+            except:
+                actual_value = json.loads(value)
+                return actual_value
+        except:
+            return None
+
     def get_value(self, key, default_val=None, namespace='application'):
         try:
             # 读取内存配置
             namespace_cache = self._cache.get(namespace)
             val = get_value_from_dict(namespace_cache, key)
             if val is not None:
-                return val
+                return self._convert_type(val)
 
             no_key = no_key_cache_key(namespace, key)
             if no_key in self._no_key:
-                return default_val
+                return self._convert_type(default_val)
 
             # 读取网络配置
             namespace_data = self.get_json_from_net(namespace)
             val = get_value_from_dict(namespace_data, key)
             if val is not None:
                 self._update_cache_and_file(namespace_data, namespace)
-                return val
+                return self._convert_type(val)
 
             # 读取文件配置
             namespace_cache = self._get_local_cache(namespace)
             val = get_value_from_dict(namespace_cache, key)
             if val is not None:
                 self._update_cache_and_file(namespace_cache, namespace)
-                return val
+                return self._convert_type(val)
 
             # 如果全部没有获取，则把默认值返回，设置本地缓存为None
             self._set_local_cache_none(namespace, key)
-            return default_val
+            return self._convert_type(default_val)
         except Exception as e:
             logging.getLogger(__name__).error("get_value has error, [key is %s], [namespace is %s], [error is %s], ",
                                               key, namespace, e)
-            return default_val
+            return self._convert_type(default_val)
 
     # 设置某个namespace的key为none，这里不设置default_val，是为了保证函数调用实时的正确性。
     # 假设用户2次default_val不一样，然而这里却用default_val填充，则可能会有问题。
@@ -148,16 +171,16 @@ class ApolloClient(object):
                 old_value = old_kv.get(key)
                 if new_value is None:
                     # 如果newValue 是空，则表示key，value被删除了。
-                    self._change_listener("delete", namespace, key, old_value)
+                    self._change_listener("delete", namespace, key, self._convert_type(old_value))
                     continue
                 if new_value != old_value:
-                    self._change_listener("update", namespace, key, new_value)
+                    self._change_listener("update", namespace, key, self._convert_type(new_value))
                     continue
             for key in new_kv:
                 new_value = new_kv.get(key)
                 old_value = old_kv.get(key)
                 if old_value is None:
-                    self._change_listener("add", namespace, key, new_value)
+                    self._change_listener("add", namespace, key, self._convert_type(new_value))
         except BaseException as e:
             logging.getLogger(__name__).warning(str(e))
 
